@@ -4,3 +4,5 @@ torch
 gTTS
 pillow
 timm
+requests
+opencv-python-headless
