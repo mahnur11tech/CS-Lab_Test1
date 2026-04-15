@@ -4,86 +4,69 @@ import cv2
 from PIL import Image
 import numpy as np
 from gtts import gTTS
-import os
 import tempfile
+import os
 
-# Page Configuration
-st.set_page_config(page_title="AI Vision Pro", layout="wide")
-st.title("🤖 AI Local Vision & Speech App")
+# Page Config
+st.set_page_config(page_title="AI Vision", layout="centered")
+st.title("🤖 All-in-One AI Vision App")
 
-# Load Pre-trained YOLOv8 Model (Free & Local)
+# Load Model (Caches so it doesn't download every time)
 @st.cache_resource
-def load_model():
-    return YOLO('yolov8n.pt')  # Nano version for speed
+def load_yolo():
+    return YOLO('yolov8n.pt')
 
-model = load_model()
+model = load_yolo()
 
-# Sidebar for Navigation
-option = st.sidebar.selectbox("Select Mode", ("File Upload", "URL Image", "Live Detection"))
-
-def speak_text(text):
-    """Convert text to speech and play in streamlit"""
-    if text:
-        tts = gTTS(text=text, lang='en')
+def speak(text):
+    if text and text != "No objects detected":
+        tts = gTTS(text=f"I can see {text}", lang='en')
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
             tts.save(fp.name)
             st.audio(fp.name, format="audio/mp3")
 
-def process_image(img):
-    """Run YOLO detection and return results"""
-    results = model(img)
-    # Get detected object names
-    names = [model.names[int(c)] for c in results[0].boxes.cls]
-    detected_str = ", ".join(set(names)) if names else "No objects detected"
+# Tabs for cleaner UI
+tab1, tab2 = st.tabs(["📤 Upload & URL", "🎥 Live Camera"])
+
+with tab1:
+    source = st.radio("Select Source:", ("Local Upload", "Image URL"))
+    img_input = None
     
-    # Plot results on image
-    res_plotted = results[0].plot()
-    return res_plotted, detected_str
-
-# --- UI LOGIC ---
-
-if option == "File Upload":
-    uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
-    if uploaded_file:
-        image = Image.open(uploaded_file)
-        st.image(image, caption="Uploaded Image", use_container_width=True)
-        
-        if st.button("Analyze & Speak"):
-            res_img, text = process_image(image)
-            st.image(res_img, caption="Processed Image", use_container_width=True)
-            st.success(f"Detected: {text}")
-            speak_text(f"I can see {text}")
-
-elif option == "URL Image":
-    url = st.text_input("Enter Image URL:")
-    if url:
-        try:
-            st.image(url, caption="URL Image", use_container_width=True)
-            if st.button("Analyze & Speak"):
-                res_img, text = process_image(url)
-                st.image(res_img, caption="Processed Image", use_container_width=True)
-                st.success(f"Detected: {text}")
-                speak_text(f"I can see {text}")
-        except Exception as e:
-            st.error("Invalid URL or Image format.")
-
-elif option == "Live Detection":
-    st.warning("Webcam live stream requires 'streamlit-webrtc' for cloud deployment, but this local version uses OpenCV.")
-    run = st.checkbox('Start Webcam')
-    FRAME_WINDOW = st.image([])
-    cam = cv2.VideoCapture(0)
-
-    while run:
-        ret, frame = cam.read()
-        if not ret:
-            break
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = model(frame)
-        res_plotted = results[0].plot()
-        FRAME_WINDOW.image(res_plotted)
+    if source == "Local Upload":
+        img_input = st.file_uploader("Upload Image", type=['jpg', 'png', 'jpeg'])
     else:
-        cam.release()
-        st.write("Webcam Stopped.")
+        url = st.text_input("Paste Image URL here:")
+        if url: img_input = url
 
-st.sidebar.markdown("---")
-st.sidebar.info("This app uses YOLOv8 & gTTS (Local Models). No API keys needed!")
+    if img_input:
+        if st.button("Analyze Now"):
+            # Process
+            results = model(img_input)
+            res_img = results[0].plot()
+            
+            # Detect names
+            names = [model.names[int(c)] for c in results[0].boxes.cls]
+            labels = ", ".join(set(names)) if names else "No objects detected"
+            
+            # Show Results
+            st.image(res_img, caption=f"Detected: {labels}", use_container_width=True)
+            st.success(f"Found: {labels}")
+            speak(labels)
+
+with tab2:
+    st.info("Note: Live detection works best on Local PC. On Cloud, use 'Camera Input' below.")
+    cam_image = st.camera_input("Take a photo to analyze")
+    
+    if cam_image:
+        img = Image.open(cam_image)
+        results = model(img)
+        res_img = results[0].plot()
+        
+        names = [model.names[int(c)] for c in results[0].boxes.cls]
+        labels = ", ".join(set(names)) if names else "Nothing detected"
+        
+        st.image(res_img)
+        speak(labels)
+
+st.divider()
+st.caption("Running on YOLOv8 & gTTS | No API Required")
