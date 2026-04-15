@@ -8,13 +8,13 @@ from gtts import gTTS
 import tempfile
 
 # --- PAGE SETUP ---
-st.set_page_config(page_title="AI Vision Pro", layout="wide")
+st.set_page_config(page_title="AI Vision Assistant", layout="wide")
 st.title("🤖 AI Vision & Voice Assistant")
 
 # --- MODEL LOADING ---
 @st.cache_resource
 def load_model():
-    # 'yolov8n.pt' is the smallest model (only ~6MB)
+    # 'yolov8n.pt' is the smallest model (~6MB)
     return YOLO('yolov8n.pt')
 
 model = load_model()
@@ -22,14 +22,14 @@ model = load_model()
 def speak(text):
     if text and text != "Nothing detected":
         try:
-            tts = gTTS(text=f"I can see {text}", lang='en')
+            tts = gTTS(text=f"I see {text}", lang='en')
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
                 tts.save(fp.name)
                 st.audio(fp.name, format="audio/mp3")
         except:
-            pass
+            st.error("Audio error.")
 
-# --- UI NAVIGATION ---
+# --- UI ---
 source = st.sidebar.radio("Select Source:", ("Upload", "URL", "Camera"))
 img_input = None
 
@@ -41,22 +41,21 @@ elif source == "URL":
 elif source == "Camera":
     img_input = st.camera_input("Take a photo")
 
-# --- EXECUTION ---
 if img_input:
     col1, col2 = st.columns(2)
     with col1:
-        st.subheader("Input Image")
+        st.subheader("Original")
         st.image(img_input, use_container_width=True)
 
     if st.button("Analyze & Speak"):
-        with st.spinner('AI is analyzing...'):
+        with st.spinner('Analyzing...'):
             results = model(img_input)
             
             # Plot Results
             res_plotted = results[0].plot()
             res_image = Image.fromarray(res_plotted[..., ::-1]) # BGR to RGB
             
-            # Get Labels
+            # Labels
             names = [model.names[int(c)] for c in results[0].boxes.cls]
             labels = ", ".join(set(names)) if names else "Nothing detected"
 
