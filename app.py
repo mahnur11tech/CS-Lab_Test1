@@ -13,9 +13,13 @@ st.title("🤖 AI Vision: Identify & Speak")
 # --- LOAD AI MODEL (Cached) ---
 @st.cache_resource
 def load_model():
+    # 'timm' library install hona zaroori hai is model ke liye
     return pipeline("object-detection", model="facebook/detr-resnet-50")
 
-detector = load_model()
+try:
+    detector = load_model()
+except Exception as e:
+    st.error(f"Model load hone mein masla hai: {e}")
 
 # --- VOICE FUNCTION ---
 def speak(text):
@@ -26,10 +30,11 @@ def speak(text):
                 tts.save(fp.name)
                 st.audio(fp.name, format="audio/mp3")
         except:
-            st.warning("Audio generate nahi ho saka.")
+            st.warning("Voice playback failed.")
 
 # --- UI NAVIGATION ---
-option = st.sidebar.radio("Image Source Select Karein:", ["Upload File", "Image URL", "Camera"])
+st.sidebar.header("Options")
+option = st.sidebar.radio("Image kahan se layen?", ["Upload File", "Image URL", "Camera"])
 
 img = None
 
@@ -38,49 +43,42 @@ if option == "Upload File":
     if file: img = Image.open(file).convert("RGB")
 
 elif option == "Image URL":
-    url = st.text_input("Image ka URL yahan paste karein:")
+    url = st.text_input("URL yahan paste karein:")
     if url:
         try:
-            response = requests.get(url)
+            response = requests.get(url, timeout=10)
             img = Image.open(BytesIO(response.content)).convert("RGB")
         except:
-            st.error("URL sahi nahi hai ya image load nahi ho saki.")
+            st.error("URL se image load nahi ho saki. Link check karein.")
 
 elif option == "Camera":
     cam_file = st.camera_input("Photo khinchen")
     if cam_file: img = Image.open(cam_file).convert("RGB")
 
-# --- ANALYSIS LOGIC ---
+# --- ANALYSIS ---
 if img:
     col1, col2 = st.columns(2)
-    
     with col1:
         st.subheader("Original Image")
         st.image(img, use_container_width=True)
 
     if st.button("Analyze & Speak"):
-        with st.spinner("AI Analysis kar raha hai..."):
+        with st.spinner("AI pehchan raha hai..."):
             results = detector(img)
             
             draw = ImageDraw.Draw(img)
-            # Font size set karna (agar available ho, warna default)
-            try:
-                font = ImageFont.load_default()
-            except:
-                font = None
-
             found_items = []
 
             for res in results:
-                if res['score'] > 0.8:
+                if res['score'] > 0.7:  # Sirf pakki cheezon ko dikhaye ga
                     label = res['label']
                     box = res['box']
                     found_items.append(label)
 
                     # Draw Box
-                    draw.rectangle([(box['xmin'], box['ymin']), (box['xmax'], box['ymax'])], outline="red", width=5)
-                    # Draw Text (Bird, Dog, etc.)
-                    draw.text((box['xmin'], box['ymin'] - 15), f"{label}", fill="red", font=font)
+                    draw.rectangle([(box['xmin'], box['ymin']), (box['xmax'], box['ymax'])], outline="red", width=6)
+                    # Draw Label Text
+                    draw.text((box['xmin'], box['ymin'] - 15), f"{label.upper()}", fill="red")
 
             with col2:
                 st.subheader("AI Detection Result")
@@ -89,7 +87,6 @@ if img:
                 if found_items:
                     detected_text = ", ".join(set(found_items))
                     st.success(f"Detected: {detected_text}")
-                    # Voice Output
                     speak(detected_text)
                 else:
-                    st.warning("AI ko kuch nazar nahi aaya.")
+                    st.warning("Kuch nazar nahi aaya. Confidence level kam kar ke dekhen.")
