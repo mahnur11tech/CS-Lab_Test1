@@ -1,66 +1,70 @@
 import os
-os.environ["QT_QPA_PLATFORM"] = "offscreen"
-
 import streamlit as st
 from ultralytics import YOLO
 from PIL import Image
 from gtts import gTTS
 import tempfile
 
-# --- PAGE SETUP ---
-st.set_page_config(page_title="AI Vision Assistant", layout="wide")
-st.title("🤖 AI Vision & Voice Assistant")
+# 1. OS Settings to avoid GUI errors
+os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
-# --- MODEL LOADING ---
+# 2. Page Setup
+st.set_page_config(page_title="AI Vision Assistant", layout="centered")
+st.title("🤖 AI Vision Assistant")
+
+# 3. Model Loading (Cached)
 @st.cache_resource
 def load_model():
-    # 'yolov8n.pt' is the smallest model (~6MB)
+    # Nano model is essential for Cloud memory limits
     return YOLO('yolov8n.pt')
 
-model = load_model()
+try:
+    model = load_model()
+except Exception as e:
+    st.error(f"AI Model Error: {e}")
 
+# 4. Voice Function
 def speak(text):
-    if text and text != "Nothing detected":
+    if text and text != "Nothing":
         try:
-            tts = gTTS(text=f"I see {text}", lang='en')
+            tts = gTTS(text=f"I found {text}", lang='en')
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
                 tts.save(fp.name)
                 st.audio(fp.name, format="audio/mp3")
         except:
-            st.error("Audio error.")
+            pass
 
-# --- UI ---
-source = st.sidebar.radio("Select Source:", ("Upload", "URL", "Camera"))
-img_input = None
+# 5. UI Logic
+source = st.radio("Choose Source:", ["Camera", "Upload File"])
 
-if source == "Upload":
-    img_input = st.file_uploader("Upload Image", type=['jpg', 'jpeg', 'png'])
-elif source == "URL":
-    url = st.text_input("Paste Image URL:")
-    if url: img_input = url
-elif source == "Camera":
-    img_input = st.camera_input("Take a photo")
+img_file = None
+if source == "Camera":
+    img_file = st.camera_input("Take a photo")
+else:
+    img_file = st.file_uploader("Upload Image", type=['jpg', 'png', 'jpeg'])
 
-if img_input:
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("Original")
-        st.image(img_input, use_container_width=True)
+if img_file:
+    # Open image with PIL
+    img = Image.open(img_file)
+    st.image(img, caption="Target Image", use_container_width=True)
 
-    if st.button("Analyze & Speak"):
-        with st.spinner('Analyzing...'):
-            results = model(img_input)
+    if st.button("Start AI Analysis"):
+        with st.spinner("AI is thinking..."):
+            # Run Detection
+            results = model(img)
             
-            # Plot Results
-            res_plotted = results[0].plot()
-            res_image = Image.fromarray(res_plotted[..., ::-1]) # BGR to RGB
-            
-            # Labels
+            # Process Results (Get labels)
             names = [model.names[int(c)] for c in results[0].boxes.cls]
-            labels = ", ".join(set(names)) if names else "Nothing detected"
+            labels = ", ".join(set(names)) if names else "Nothing"
+            
+            # Show Plotted Result
+            # Note: We use YOLO's internal plot() which works with PIL
+            res_array = results[0].plot() 
+            res_img = Image.fromarray(res_array)
+            
+            st.image(res_img, caption="Detection Result", use_container_width=True)
+            st.success(f"Detected: {labels}")
+            speak(labels)
 
-            with col2:
-                st.subheader("AI Result")
-                st.image(res_image, use_container_width=True)
-                st.success(f"Detected: {labels}")
-                speak(labels)
+st.divider()
+st.caption("Running on YOLOv8 & gTTS (Free Version)")
