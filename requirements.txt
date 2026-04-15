@@ -3,3 +3,4 @@ transformers
 torch
 gTTS
 pillow
+timm
