@@ -1,59 +1,56 @@
 import streamlit as st
-import cv2
-import cvlib as cv
-from cvlib.object_detection import draw_bbox
-from PIL import Image
+import mediapipe as mp
 import numpy as np
-from gtts import gTTS
-import tempfile
-import os
+from PIL import Image
+import cv2
 
-# Page Setup
-st.set_page_config(page_title="Light AI Vision", layout="centered")
-st.title("🚀 Ultra-Light AI Vision")
-st.write("Using a memory-efficient model to prevent 'Out of Memory' errors.")
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="AI Object Detector", layout="centered")
 
-def speak(text):
-    if text:
-        tts = gTTS(text=f"I can see {text}", lang='en')
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
-            tts.save(fp.name)
-            st.audio(fp.name, format="audio/mp3")
+st.title("🤖 Light-Weight AI Detector")
+st.write("Duniya ki sabse halki AI app jo memory full nahi karegi.")
 
-# Choice
-option = st.radio("Select Source:", ["Upload Image", "Camera Input"])
+# --- INITIALIZE MEDIAPIPE ---
+mp_object_detection = mp.solutions.object_detection
+mp_drawing = mp.solutions.drawing_utils
 
-img_input = None
-if option == "Upload Image":
-    img_input = st.file_uploader("Upload", type=['jpg', 'png', 'jpeg'])
+# --- UI LOGIC ---
+source = st.radio("Image kahan se layen?", ["Upload Karein", "Camera Se Lein"])
+
+img_file = None
+if source == "Upload Karein":
+    img_file = st.file_uploader("Image select karein", type=['jpg', 'png', 'jpeg'])
 else:
-    img_input = st.camera_input("Take a photo")
+    img_file = st.camera_input("Photo khinchen")
 
-if img_input:
-    # Read Image
-    file_bytes = np.asarray(bytearray(img_input.read()), dtype=np.uint8)
-    image = cv2.imdecode(file_bytes, 1)
-    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+if img_file:
+    # Convert image for processing
+    image = Image.open(img_file)
+    image_np = np.array(image)
     
-    st.image(image_rgb, caption="Input Image", use_container_width=True)
+    st.image(image, caption="Aapki Image", use_container_width=True)
 
-    if st.button("Identify Objects"):
-        with st.spinner("Processing..."):
-            # Object Detection (Super Light)
-            bbox, label, conf = cv.detect_common_objects(image)
-            
-            # Draw boxes
-            out_img = draw_bbox(image, bbox, label, conf)
-            out_img_rgb = cv2.cvtColor(out_img, cv2.COLOR_BGR2RGB)
-            
-            # Results
-            st.image(out_img_rgb, caption="AI Result", use_container_width=True)
-            
-            unique_labels = ", ".join(set(label)) if label else "Nothing detected"
-            st.success(f"Detected: {unique_labels}")
-            
-            # Audio
-            speak(unique_labels)
+    if st.button("AI Se Check Karwayen"):
+        with st.spinner("AI dekh raha hai..."):
+            # Setup MediaPipe Detector
+            with mp_object_detection.ObjectDetection(min_detection_confidence=0.5) as detector:
+                results = detector.process(image_np)
 
-st.divider()
-st.caption("Running on CVLib & OpenCV (No Heavy Torch/YOLO)")
+                # Draw Results
+                annotated_image = image_np.copy()
+                detections_count = 0
+                
+                if results.detections:
+                    for detection in results.detections:
+                        mp_drawing.draw_detection(annotated_image, detection)
+                        detections_count += 1
+                
+                # Show Result
+                st.image(annotated_image, caption="AI Result", use_container_width=True)
+                
+                if detections_count > 0:
+                    st.success(f"AI ne {detections_count} cheezain pehchani hain!")
+                else:
+                    st.warning("AI ko kuch nazar nahi aaya.")
+
+st.info("Note: Is app mein sirf 2 files hain aur ye memory crash nahi hogi.")
