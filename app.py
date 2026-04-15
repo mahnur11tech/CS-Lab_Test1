@@ -5,6 +5,11 @@ from gtts import gTTS
 import tempfile
 import os
 
+os.environ["QT_QPA_PLATFORM"] = "offscreen" # Graphics error se bachne ke liye
+
+import streamlit as st
+from ultralytics import YOLO
+# Baki code...
 # --- APP CONFIG ---
 st.set_page_config(page_title="AI Vision Pro", page_icon="🤖", layout="wide")
 
