@@ -3,68 +3,65 @@ from ultralytics import YOLO
 from PIL import Image
 from gtts import gTTS
 import tempfile
-import numpy as np
+import io
 
-# Page Setup
-st.set_page_config(page_title="AI Vision", layout="centered")
-st.title("🤖 Local AI Vision (No API)")
+# Page Config
+st.set_page_config(page_title="AI Vision", layout="wide")
+st.title("🚀 Pure AI Vision App")
 
-# Model Loading (Cached for speed)
+# Model Load (Directly from Ultralytics)
 @st.cache_resource
 def load_model():
-    # Download tiny model for faster performance on Cloud
+    # yolov8n.pt is the lightest model
     return YOLO('yolov8n.pt')
 
-model = load_model()
+try:
+    model = load_model()
+except Exception as e:
+    st.error("Model loading error. This usually happens on Cloud without 'packages.txt'.")
 
 def speak(text):
-    """Text to Speech logic"""
     if text:
-        tts = gTTS(text=f"Detected {text}", lang='en')
+        tts = gTTS(text=f"I found {text}", lang='en')
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
             tts.save(fp.name)
             st.audio(fp.name, format="audio/mp3")
 
-# UI Tabs
-tab1, tab2 = st.tabs(["🖼️ Image Upload/URL", "📸 Camera Input"])
+# Layout
+col1, col2 = st.columns(2)
 
-with tab1:
-    choice = st.radio("Source:", ["Upload File", "Image URL"])
-    img_data = None
+with col1:
+    st.header("Input")
+    source = st.radio("Choose Source:", ["Camera", "Upload", "URL"])
     
-    if choice == "Upload File":
-        img_data = st.file_uploader("Select Image", type=['jpg', 'jpeg', 'png'])
+    img_input = None
+    if source == "Camera":
+        img_input = st.camera_input("Take a photo")
+    elif source == "Upload":
+        img_input = st.file_uploader("Upload Image", type=['jpg', 'jpeg', 'png'])
     else:
-        url = st.text_input("Enter Image URL")
-        if url: img_data = url
+        url = st.text_input("Image URL")
+        if url: img_input = url
 
-    if img_data:
-        if st.button("Analyze Image"):
-            results = model(img_data)
-            # Plotting with YOLO's internal PIL-based method
-            res_plotted = results[0].plot()
-            st.image(res_plotted, caption="Result", use_container_width=True)
-            
-            # Extract labels
-            names = [model.names[int(c)] for c in results[0].boxes.cls]
-            label_text = ", ".join(set(names)) if names else "Nothing"
-            st.success(f"Labels: {label_text}")
-            speak(label_text)
-
-with tab2:
-    st.write("Take a picture using your browser camera:")
-    cam_photo = st.camera_input("Snapshot")
-    
-    if cam_photo:
-        # Process the camera photo
-        img = Image.open(cam_photo)
-        results = model(img)
-        res_plotted = results[0].plot()
-        st.image(res_plotted)
+with col2:
+    st.header("Result")
+    if img_input:
+        # Prediction
+        results = model(img_input)
         
+        # Plotting using PIL instead of OpenCV
+        res_array = results[0].plot() # This returns a numpy array (BGR)
+        res_image = Image.fromarray(res_array[..., ::-1]) # Convert BGR to RGB
+        
+        st.image(res_image, use_container_width=True)
+        
+        # Get Names
         names = [model.names[int(c)] for c in results[0].boxes.cls]
-        label_text = ", ".join(set(names)) if names else "Nothing"
-        speak(label_text)
+        labels = ", ".join(set(names)) if names else "Nothing detected"
+        
+        st.success(f"Detected: {labels}")
+        if st.button("Listen to Result"):
+            speak(labels)
 
 st.divider()
-st.info("Direct Run: 2 Files Only (app.py & requirements.txt)")
+st.caption("Standard 2-file deployment: app.py & requirements.txt")
