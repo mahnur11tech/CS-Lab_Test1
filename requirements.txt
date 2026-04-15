@@ -1,4 +1,4 @@
 streamlit
-ultralytics==8.1.0
+ultralytics-cpu
 gTTS
 pillow
