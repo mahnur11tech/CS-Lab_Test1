@@ -1,5 +1,6 @@
 import os
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
+os.environ["STREAMLIT_SERVER_MAX_UPLOAD_SIZE"] = "10"
 
 import streamlit as st
 from ultralytics import YOLO
