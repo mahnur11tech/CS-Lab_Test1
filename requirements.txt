@@ -1,3 +1,5 @@
 streamlit
-mediapipe
-Pillow
+transformers
+torch
+pillow
+timm
