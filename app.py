@@ -1,56 +1,51 @@
 import streamlit as st
-import mediapipe as mp
-import numpy as np
-from PIL import Image
-import cv2
+from transformers import pipeline
+from PIL import Image, ImageDraw
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="AI Object Detector", layout="centered")
+st.set_page_config(page_title="Simple AI Detector", layout="centered")
 
-st.title("🤖 Light-Weight AI Detector")
-st.write("Duniya ki sabse halki AI app jo memory full nahi karegi.")
+st.title("🤖 2-File Smart Detector")
+st.write("This version is designed to run without 'packages.txt'.")
 
-# --- INITIALIZE MEDIAPIPE ---
-mp_object_detection = mp.solutions.object_detection
-mp_drawing = mp.solutions.drawing_utils
+# --- LOAD MODEL (Hugging Face) ---
+@st.cache_resource
+def load_model():
+    # Using a super light-weight object detection model
+    return pipeline("object-detection", model="facebook/detr-resnet-50")
 
-# --- UI LOGIC ---
-source = st.radio("Image kahan se layen?", ["Upload Karein", "Camera Se Lein"])
+detector = load_model()
 
-img_file = None
-if source == "Upload Karein":
-    img_file = st.file_uploader("Image select karein", type=['jpg', 'png', 'jpeg'])
-else:
-    img_file = st.camera_input("Photo khinchen")
+# --- UI ---
+img_file = st.file_uploader("Upload an image", type=['jpg', 'png', 'jpeg'])
 
 if img_file:
-    # Convert image for processing
-    image = Image.open(img_file)
-    image_np = np.array(image)
-    
-    st.image(image, caption="Aapki Image", use_container_width=True)
+    img = Image.open(img_file)
+    st.image(img, caption="Your Image", use_container_width=True)
 
-    if st.button("AI Se Check Karwayen"):
-        with st.spinner("AI dekh raha hai..."):
-            # Setup MediaPipe Detector
-            with mp_object_detection.ObjectDetection(min_detection_confidence=0.5) as detector:
-                results = detector.process(image_np)
+    if st.button("Analyze Image"):
+        with st.spinner("AI is looking..."):
+            # Run Detection
+            results = detector(img)
+            
+            # Draw on image using PIL (No OpenCV needed!)
+            draw = ImageDraw.Draw(img)
+            found_objects = []
 
-                # Draw Results
-                annotated_image = image_np.copy()
-                detections_count = 0
+            for res in results:
+                box = res['box']
+                label = res['label']
+                score = res['score']
                 
-                if results.detections:
-                    for detection in results.detections:
-                        mp_drawing.draw_detection(annotated_image, detection)
-                        detections_count += 1
-                
-                # Show Result
-                st.image(annotated_image, caption="AI Result", use_container_width=True)
-                
-                if detections_count > 0:
-                    st.success(f"AI ne {detections_count} cheezain pehchani hain!")
-                else:
-                    st.warning("AI ko kuch nazar nahi aaya.")
+                if score > 0.7:  # Only show confident results
+                    draw.rectangle([(box['xmin'], box['ymin']), (box['xmax'], box['ymax'])], outline="red", width=3)
+                    draw.text((box['xmin'], box['ymin']), f"{label} {int(score*100)}%", fill="red")
+                    found_objects.append(label)
 
-st.info("Note: Is app mein sirf 2 files hain aur ye memory crash nahi hogi.")
+            # Show Result
+            st.image(img, caption="AI Detection Result", use_container_width=True)
+            
+            if found_objects:
+                st.success(f"I detected: {', '.join(set(found_objects))}")
+            else:
+                st.warning("I couldn't identify anything clearly.")
